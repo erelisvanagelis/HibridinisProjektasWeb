@@ -3,8 +3,9 @@ import Box from "@mui/material/Box";
 import TextField from "@mui/material/TextField";
 import { Button } from "@mui/material";
 
+
 export default function Form({ title, setPassword, setEmail, handleAction }) {
-  return (
+  return ( 
     <div style={{ width: "100%", justifyContent: "space-between" }}>
       <div className="heading-container">
         <h3>{title} Form</h3>

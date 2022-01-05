@@ -3,104 +3,117 @@ import "./App.css";
 import Form from "./pages/Form";
 import { useState, useEffect } from "react";
 import * as constants from "./utilities/constants";
+import * as firebase from "./utilities/firebase";
 import {
   BrowserRouter as Router,
   Routes,
   Route,
   useNavigate,
 } from "react-router-dom";
-import { app } from "./utilities/firebase";
 import {
   getAuth,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
 } from "firebase/auth";
+import {
+  getFirestore,
+  collection,
+  where,
+  query,
+  deleteDoc,
+} from "firebase/firestore";
+import {
+  useCollection,
+  useCollectionData,
+  useCollectionDataOnce,
+} from "react-firebase-hooks/firestore";
+import { useAuthState } from "react-firebase-hooks/auth";
+import { doc, setDoc, addDoc } from "firebase/firestore";
+
 import Landing from "./pages/Landing";
-import Home from "./pages/NewAdvert";
 import CustomAppBar from "./components/CustomAppBar";
 import NewAdvert from "./pages/NewAdvert";
 import Pending from "./pages/Pending";
 import Progress from "./pages/Progress";
 import Completed from "./pages/Completed";
-
-const pages = ["New Advert", "Pending", "In Progress", "Completed"];
-const settings = ["Logout"];
+import AdvertList from "./pages/AdvertList";
 
 function App() {
   const [email, setEmail] = useState("xxxatmsxxx@gmail.com");
   const [password, setPassword] = useState("123456");
-  const [auth, setAuth] = useState(null);
+  const [user, loading, error] = useAuthState(firebase.authentication);
+  const [advert, setAdvert] = useState("");
+  const [userId, setUserId] = useState("");
   const [action, setAction] = useState({
     title: "Sign In",
     handleAction: () => handleAction(constants.ACTION_TO_SIGN_IN),
   });
-  const authentication = getAuth();
   const navigate = useNavigate();
 
+  const [newAdvertValues, setNewAdvertValues] = useState({
+    city: "",
+    url: "",
+    price: "",
+    date: "",
+    comment: "",
+    status: "pending",
+  });
+
+  const [cities] = useCollectionDataOnce(firebase.citiesRef, { idField: "id" });
+  const q = query(firebase.advertsRef, where("userId", "==", userId));
+  const [adverts] = useCollectionData(q, { idField: "id" });
+
   useEffect(() => {
-    const authToken = sessionStorage.getItem("Auth Token");
-    setAuth(authToken);
-  }, []);
-  useEffect(() => {
-    console.log(`Auth: ${auth}`)
-    if (auth) {
+    if (user !== null) {
+      setUserId(user.uid);
       setAction({
-        title: "Sign Out",
+        title: user.email + "(Sign Out)",
         handleAction: () => handleAction(constants.ACTION_SIGN_OUT),
       });
-    } else if (auth === null) {
+    } else {
+      setUserId("");
       setAction({
         title: "Sign In",
         handleAction: () => handleAction(constants.ACTION_TO_SIGN_IN),
       });
     }
-    // console.log(`Auth: ${auth}`)
-  }, [auth]);
+  }, [user]);
 
   const handleAction = async (id) => {
     console.log(`actionId: ${id}`);
-    console.log(`email: ${email}`);
-    console.log(`password: ${password}`);
     switch (id) {
       case constants.ACTION_SIGN_IN:
         try {
           const response = await signInWithEmailAndPassword(
-            authentication,
+            firebase.authentication,
             email,
             password
           );
-          console.log(response);
-          sessionStorage.setItem(
-            "Auth Token",
-            response._tokenResponse.refreshToken
-          );
-          setAuth(response._tokenResponse.refreshToken);
+
           navigate(constants.ROUTE_NEW);
         } catch (error) {
           console.log(error);
-          // alert(error)
+          alert(error);
         }
         break;
       case constants.ACTION_SIGN_UP:
-        const response = await createUserWithEmailAndPassword(
-          authentication,
-          email,
-          password
-        );
-        console.log(response);
-        sessionStorage.setItem(
-          "Auth Token",
-          response._tokenResponse.refreshToken
-        );
+        try {
+          const response = await createUserWithEmailAndPassword(
+            firebase.authentication,
+            email,
+            password
+          );
+
+          navigate(constants.ROUTE_NEW);
+          console.log(response);
+        } catch (error) {
+          alert(error);
+        }
+
         break;
 
       case constants.ACTION_SIGN_OUT:
-        sessionStorage.setItem(
-          "Auth Token",
-          null
-        );        
-        setAuth(null)
-
+        firebase.authentication.signOut();
         navigate(constants.ROUTE_LANDING);
         break;
 
@@ -122,13 +135,42 @@ function App() {
       case constants.ACTION_TO_COMPLETED:
         navigate(constants.ROUTE_COMPLETED);
         break;
+      case constants.ACTION_ADD_ADVERT:
+        console.log(newAdvertValues);
+        if (user == null) {
+          alert("Sign in first");
+        } else {
+          await addDoc(firebase.advertsRef, {
+            ...newAdvertValues,
+            userId: userId,
+            technicianId: 0,
+          });
+
+          setNewAdvertValues({
+            city: "",
+            url: "",
+            price: "",
+            date: "",
+            comment: "",
+            status: "pending",
+          });
+          navigate(constants.ROUTE_PENDING);
+        }
+
+        break;
+
+      case constants.ACTION_CANCEL_ADVERT:
+        console.log();
+
+        await deleteDoc(doc(firebase.advertsRef, '/' + advert.id));
+        // await deleteDoc(doc(db, "cities", "DC"));
+        break;
+
       default:
         console.log(`Action unhandled`);
     }
   };
 
-  //   const pages = ["New Advert", "Pending", "In Progress", "Completed"];
-  // const settings = ["Logout"];
   return (
     <div className="App">
       <CustomAppBar
@@ -151,8 +193,8 @@ function App() {
           },
           action,
         ]}
-        settings={settings}
       />
+
       <Routes>
         <Route
           path={constants.ROUTE_LANDING}
@@ -189,35 +231,42 @@ function App() {
           path={constants.ROUTE_NEW}
           element={
             <NewAdvert
-              handleSignIn={() => handleAction(constants.ACTION_TO_SIGN_IN)}
-              handleSignUp={() => handleAction(constants.ACTION_TO_SIGN_UP)}
+              comboBoxData={cities}
+              values={newAdvertValues}
+              setValues={setNewAdvertValues}
+              handleAction={() => handleAction(constants.ACTION_ADD_ADVERT)}
             />
           }
         />
         <Route
           path={constants.ROUTE_PENDING}
           element={
-            <Pending
-              handleSignIn={() => handleAction(constants.ACTION_TO_SIGN_IN)}
-              handleSignUp={() => handleAction(constants.ACTION_TO_SIGN_UP)}
+            <AdvertList
+              adverts={specificAdverts(adverts, "pending")}
+              setAdvert={setAdvert}
+              buttonLabel="Cancel"
+              handleAction={() => handleAction(constants.ACTION_CANCEL_ADVERT)}
             />
           }
         />
         <Route
           path={constants.ROUTE_PROGRESS}
           element={
-            <Progress
-              handleSignIn={() => handleAction(constants.ACTION_TO_SIGN_IN)}
-              handleSignUp={() => handleAction(constants.ACTION_TO_SIGN_UP)}
+            <AdvertList
+              setAdvert={setAdvert}
+              adverts={specificAdverts(adverts, "progress")}
+              buttonLabel=""
             />
           }
         />
         <Route
           path={constants.ROUTE_COMPLETED}
           element={
-            <Completed
-              handleSignIn={() => handleAction(constants.ACTION_TO_SIGN_IN)}
-              handleSignUp={() => handleAction(constants.ACTION_TO_SIGN_UP)}
+            <AdvertList
+              adverts={specificAdverts(adverts, "completed")}
+              setAdvert={setAdvert}
+              buttonLabel="Details"
+              handleAction={() => handleAction(constants.ACTION_CANCEL_ADVERT)}
             />
           }
         />
@@ -226,4 +275,15 @@ function App() {
   );
 }
 
+function specificAdverts(adverts, status) {
+  const array = [];
+  if (adverts != null && adverts.length > 0) {
+    adverts.map((advert) => {
+      if (advert.status === status) {
+        array.push(advert);
+      }
+    });
+  }
+  return array;
+}
 export default App;

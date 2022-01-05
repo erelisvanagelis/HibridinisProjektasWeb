@@ -1,11 +1,9 @@
 // Import the functions you need from the SDKs you need
 import { initializeApp } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
-import {
-  getAuth,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-} from "firebase/auth";
+import { getAuth } from "firebase/auth";
+import { getFirestore, collection, where, query } from 'firebase/firestore';
+import { useCollection, useCollectionData } from 'react-firebase-hooks/firestore';
 // TODO: Add SDKs for Firebase products that you want to use
 // https://firebase.google.com/docs/web/setup#available-libraries
 
@@ -18,11 +16,14 @@ const firebaseConfig = {
   storageBucket: "hibridinisprojektas.appspot.com",
   messagingSenderId: "651899146164",
   appId: "1:651899146164:web:b6a81dfba76cdb26edece1",
-  measurementId: "G-E2M8SEB9TD"
+  measurementId: "G-E2M8SEB9TD",
 };
 
 // Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
-const authentication = getAuth();
+export const app = initializeApp(firebaseConfig);
+export const analytics = getAnalytics(app);
+export const authentication = getAuth(app);
+export const database = getFirestore(app);
 
+export const citiesRef = collection(database, "cities");
+export const advertsRef = collection(database, "adverts");
